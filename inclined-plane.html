@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Simulador de Plano Inclinado — 4.º ESO</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#f8fafc;color:#1e293b;padding:16px}
+  h2{font-size:18px;font-weight:500;margin-bottom:4px}
+  .sub{font-size:13px;color:#64748b;margin-bottom:16px}
+  .card{background:#fff;border-radius:10px;padding:14px 16px;border:0.5px solid #e2e8f0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .section-title{font-size:13px;font-weight:500;margin-bottom:10px}
+  .row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:0.5px solid #f1f5f9}
+  .row span:first-child{font-size:12px}
+  .row span:last-child{font-size:13px;font-weight:500}
+  label.var-label{font-size:12px;color:#64748b}
+  input[type=range]{width:100%;margin-top:2px}
+  input[type=number]{width:58px;font-size:12px;text-align:right;padding:2px 4px;border:0.5px solid #cbd5e1;border-radius:4px;background:#f8fafc;color:#1e293b}
+  .var-row{display:flex;justify-content:space-between;margin-bottom:4px}
+  .var-block{margin-bottom:12px}
+  .status-box{margin-top:10px;padding:6px 10px;border-radius:6px;font-size:12px;font-weight:500}
+  .fext-sep{border-top:0.5px solid #e2e8f0;padding-top:10px;margin-top:4px}
+  .radio-row{display:flex;gap:8px;margin-bottom:8px;font-size:12px}
+  .radio-row label{display:flex;align-items:center;gap:4px;cursor:pointer}
+  .fext-check{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:12px;font-weight:500;cursor:pointer}
+  details{background:#fff;border-radius:10px;padding:14px 16px;border:0.5px solid #e2e8f0;margin-bottom:16px}
+  summary{font-size:13px;font-weight:500;cursor:pointer;user-select:none}
+  .paso{margin-top:12px;font-size:13px;line-height:1.9}
+  .paso p{margin-bottom:4px}
+  .wolf-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+  .wolf-card{background:#fff;border-radius:10px;padding:12px 14px;border:0.5px solid #e2e8f0}
+  .wolf-card h4{font-size:12px;font-weight:500;margin-bottom:3px}
+  .wolf-card p.desc{font-size:11px;color:#64748b;margin-bottom:6px}
+  .wolf-formula{font-size:12px;font-family:monospace;background:#f8fafc;padding:5px 8px;border-radius:4px;margin-bottom:8px;word-break:break-all}
+  .wolf-btn{margin-top:8px;font-size:11px;padding:5px 0;border-radius:6px;border:0.5px solid #cbd5e1;background:#f8fafc;color:#1e293b;cursor:pointer;width:100%}
+  .wolf-btn:hover{background:#e2e8f0}
+  .foot{font-size:11px;color:#94a3b8;text-align:center;margin-top:10px}
+  .dist-row{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11px;color:#64748b}
+  .dist-row input[type=number]{width:52px}
+  .dist-row input[type=range]{flex:1}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const {useState, useCallback} = React;
+const DEG = Math.PI / 180;
+const G = 9.8;
+
+function calcular({masa,angulo,mu,fext,fextDir,fextActiva}){
+  const rad=angulo*DEG, P=masa*G;
+  const Px=P*Math.sin(rad), Py=P*Math.cos(rad), N=Py;
+  const Frmax=mu*N;
+  const Fext=fextActiva?(fextDir==="arriba"?fext:-fext):0;
+  const neta=Px-Fext;
+  let Fr,estado,Res;
+  if(Math.abs(neta)<=Frmax){estado="reposo";Fr=neta;Res=0;}
+  else if(neta>0){estado="desliza hacia abajo";Fr=-Frmax;Res=neta-Frmax;}
+  else{estado="se mueve hacia arriba";Fr=Frmax;Res=neta+Frmax;}
+  return{P,Px,Py,N,Fr,Fext:fextActiva?fext:0,FextDir:fextDir,Res,estado};
+}
+
+function n2(v){return Math.abs(v)<0.001?"0":Math.abs(v).toFixed(2);}
+
+function Arrow({svg,x1,y1,x2,y2,color,label,lx,ly}){
+  const dx=x2-x1,dy=y2-y1,len=Math.sqrt(dx*dx+dy*dy);
+  if(len<4)return null;
+  const ux=dx/len,uy=dy/len,hlen=9,hw=4;
+  const bx=x2-ux*hlen,by=y2-uy*hlen;
+  const px=-uy*hw,py=ux*hw;
+  return React.createElement(React.Fragment,null,
+    React.createElement("line",{x1,y1,x2,y2,stroke:color,strokeWidth:"1.8"}),
+    React.createElement("polygon",{points:`${x2},${y2} ${bx+px},${by+py} ${bx-px},${by-py}`,fill:color}),
+    label&&React.createElement("text",{x:lx??x2+6,y:ly??y2-5,fontSize:"11",fill:color,fontWeight:"600",fontFamily:"serif"},label)
+  );
+}
+
+const COLORS={P:"#1e40af",Pxy:"#7c3aed",N:"#0891b2",Fr:"#b45309",Fext:"#be185d",R:"#dc2626"};
+
+function wolfram(q){window.open("https://www.wolframalpha.com/input?i="+encodeURIComponent(q),"_blank");}
+
+function App(){
+  const [masa,setMasa]=useState(5);
+  const [angulo,setAngulo]=useState(30);
+  const [mu,setMu]=useState(0.3);
+  const [fext,setFext]=useState(10);
+  const [fextDir,setFextDir]=useState("arriba");
+  const [fextActiva,setFextActiva]=useState(false);
+  const [masaI,setMasaI]=useState("5");
+  const [angI,setAngI]=useState("30");
+  const [muI,setMuI]=useState("0.3");
+  const [fextI,setFextI]=useState("10");
+  const [dist,setDist]=useState(5);
+  const [distI,setDistI]=useState("5");
+
+  const f=calcular({masa,angulo,mu,fext,fextDir,fextActiva});
+  const acel=f.Res/masa;
+
+  const sl=(set,setI,val)=>{set(val);setI(String(val));};
+  const inp=(set,setI,val,min,max)=>{setI(val);const n=parseFloat(val);if(!isNaN(n)&&n>=min&&n<=max)set(n);};
+
+  const rad=angulo*DEG;
+  const SCALE=5;
+  const cx=300,cy=210;
+  const axX=Math.cos(rad),axY=-Math.sin(rad);
+  const ayX=-Math.sin(rad),ayY=-Math.cos(rad);
+  const bw=52,bh=32;
+  const bcx=cx+ayX*(bh/2), bcy=cy+ayY*(bh/2);
+
+  const bloquePoints=()=>{
+    return [[-bw/2,0],[bw/2,0],[bw/2,-bh],[-bw/2,-bh]].map(([lx,ly])=>{
+      return `${cx+lx*axX+ly*(-ayX)},${cy+lx*axY+ly*(-ayY)}`;
+    }).join(" ");
+  };
+
+  const pEx=bcx, pEy=bcy+f.P*SCALE;
+  const pxEx=bcx+(-axX)*f.Px*SCALE, pxEy=bcy+(-axY)*f.Px*SCALE;
+  const pyEx=bcx+(-ayX)*f.Py*SCALE, pyEy=bcy+(-ayY)*f.Py*SCALE;
+  const nEx=bcx+ayX*f.N*SCALE, nEy=bcy+ayY*f.N*SCALE;
+  const frSign=f.Fr>=0?1:-1;
+  const frEx=bcx+axX*frSign*Math.abs(f.Fr)*SCALE, frEy=bcy+axY*frSign*Math.abs(f.Fr)*SCALE;
+  const feSign=fextDir==="arriba"?1:-1;
+  const feEx=bcx+axX*feSign*f.Fext*SCALE, feEy=bcy+axY*feSign*f.Fext*SCALE;
+  const resSign=f.Res<=0?1:-1;
+  const rEx=bcx+axX*resSign*Math.abs(f.Res)*SCALE, rEy=bcy+axY*resSign*Math.abs(f.Res)*SCALE;
+  const planoLen=200;
+  const px1=cx-axX*planoLen, py1=cy-axY*planoLen;
+  const px2=cx+axX*planoLen, py2=cy+axY*planoLen;
+  const ejeLen=65;
+  const eColor=f.estado==="reposo"?"#16a34a":f.estado==="desliza hacia abajo"?"#dc2626":"#2563eb";
+
+  const leyenda=[
+    {color:COLORS.P,label:"P — peso"},
+    {color:COLORS.Pxy,label:"Pₓ, Pᵧ — componentes"},
+    {color:COLORS.N,label:"N — normal"},
+    {color:COLORS.Fr,label:"F_roz — rozamiento"},
+    ...(fextActiva?[{color:COLORS.Fext,label:"F_ext — externa"}]:[]),
+    {color:COLORS.R,label:"F_total — resultante"},
+  ];
+
+  const queries=[
+    {
+      title:"F_ext para equilibrio",
+      desc:"Fuerza cuesta arriba que anula la resultante",
+      formula:`F_eq = Pₓ − F_roz_máx = ${n2(f.Px)} − ${n2(mu*f.N)} = ${n2(Math.max(0,f.Px-mu*f.N))} N`,
+      action:()=>wolfram(`solve F_ext = ${n2(f.Px)} - ${n2(mu*f.N)} N, theta=${angulo} degrees, m=${masa} kg, mu=${mu}, g=9.8 m/s^2`),
+      extra:null
+    },
+    {
+      title:"Aceleración del bloque",
+      desc:"a = F_total / m",
+      formula:`a = ${n2(f.Res)} / ${masa} = ${n2(Math.abs(acel))} m/s²`,
+      action:()=>wolfram(`acceleration = (${n2(f.Px)} - ${n2(mu*f.N)}) / ${masa} N/kg`),
+      extra:null
+    },
+    {
+      title:"Velocidad tras recorrer d",
+      desc:`v² = 2·a·d`,
+      formula:`v = √(2·${n2(Math.abs(acel))}·${dist}) = ${n2(Math.sqrt(2*Math.abs(acel)*dist))} m/s`,
+      action:()=>wolfram(`v = sqrt(2 * ${n2(Math.abs(acel))} * ${dist}), solve for v`),
+      extra:React.createElement("div",{className:"dist-row"},
+        React.createElement("span",null,"d (m):"),
+        React.createElement("input",{type:"number",value:distI,min:0.1,max:100,step:0.5,
+          onChange:e=>inp(setDist,setDistI,e.target.value,0.1,100)}),
+        React.createElement("input",{type:"range",min:0.1,max:100,step:0.5,value:dist,
+          onChange:e=>sl(setDist,setDistI,parseFloat(e.target.value))})
+      )
+    },
+    {
+      title:"Tiempo y distancia",
+      desc:"x = ½·a·t², v = a·t (gráfico en WolframAlpha)",
+      formula:`En 3 s: x = ${n2(0.5*Math.abs(acel)*9)} m, v = ${n2(Math.abs(acel)*3)} m/s`,
+      action:()=>wolfram(`plot x(t) = 0.5 * ${n2(Math.abs(acel))} * t^2, v(t) = ${n2(Math.abs(acel))} * t for t from 0 to 10`),
+      extra:null
+    },
+  ];
+
+  const e=React.createElement;
+
+  return e("div",null,
+    e("h2",null,"Simulador de plano inclinado"),
+    e("p",{className:"sub"},"Física y Química — 4.º ESO"),
+
+    // DIAGRAMA
+    e("div",{className:"card",style:{marginBottom:16,padding:"12px 0 4px"}},
+      e("svg",{width:"100%",viewBox:"0 0 620 340",style:{display:"block"}},
+        // Suelo
+        e("line",{x1:px1-18,y1:py1,x2:px1,y2:py1,stroke:"#94a3b8",strokeWidth:"1.5"}),
+        e("line",{x1:px1-18,y1:py1,x2:px1-18,y2:py1+13,stroke:"#94a3b8",strokeWidth:"1.5"}),
+        e("line",{x1:px1-18,y1:py1+13,x2:px2+14,y2:py1+13,stroke:"#94a3b8",strokeWidth:"1.5"}),
+        // Plano
+        e("line",{x1:px1,y1:py1,x2:px2,y2:py2,stroke:"#64748b",strokeWidth:"2.5"}),
+        // Ángulo
+        e("path",{d:`M ${px1+50} ${py1} A 50 50 0 0 0 ${px1+50*Math.cos(rad)} ${py1-50*Math.sin(rad)}`,fill:"none",stroke:"#94a3b8",strokeWidth:"1",strokeDasharray:"3 3"}),
+        e("text",{x:px1+57,y:py1-13,fontSize:"11",fill:"#64748b",fontFamily:"serif"},`θ=${angulo}°`),
+        // Ejes rotados
+        e("line",{x1:bcx-axX*ejeLen,y1:bcy-axY*ejeLen,x2:bcx+axX*ejeLen,y2:bcy+axY*ejeLen,stroke:"#94a3b8",strokeWidth:"1",strokeDasharray:"5 4"}),
+        e("line",{x1:bcx-ayX*ejeLen,y1:bcy-ayY*ejeLen,x2:bcx+ayX*ejeLen,y2:bcy+ayY*ejeLen,stroke:"#94a3b8",strokeWidth:"1",strokeDasharray:"5 4"}),
+        e("text",{x:bcx+axX*(ejeLen+7),y:bcy+axY*(ejeLen+7)+4,fontSize:"10",fill:"#94a3b8",fontFamily:"serif"},"x'"),
+        e("text",{x:bcx+ayX*(ejeLen+7),y:bcy+ayY*(ejeLen+7)+4,fontSize:"10",fill:"#94a3b8",fontFamily:"serif"},"y'"),
+        // Bloque
+        e("polygon",{points:bloquePoints(),fill:"#3b82f6",fillOpacity:"0.2",stroke:"#3b82f6",strokeWidth:"1.8"}),
+        // Paralelogramo
+        e("line",{x1:pxEx,y1:pxEy,x2:pEx,y2:pEy,stroke:COLORS.Pxy,strokeWidth:"0.8",strokeDasharray:"4 3",opacity:"0.5"}),
+        e("line",{x1:pyEx,y1:pyEy,x2:pEx,y2:pEy,stroke:COLORS.Pxy,strokeWidth:"0.8",strokeDasharray:"4 3",opacity:"0.5"}),
+        // Vectores
+        e(Arrow,{x1:bcx,y1:bcy,x2:pEx,y2:pEy,color:COLORS.P,label:"P",lx:pEx+5,ly:pEy+5}),
+        e(Arrow,{x1:bcx,y1:bcy,x2:pyEx,y2:pyEy,color:COLORS.Pxy,label:"Pᵧ",lx:pyEx+5,ly:pyEy+11}),
+        e(Arrow,{x1:bcx,y1:bcy,x2:pxEx,y2:pxEy,color:COLORS.Pxy,label:"Pₓ",lx:pxEx-22,ly:pxEy+13}),
+        e(Arrow,{x1:bcx,y1:bcy,x2:nEx,y2:nEy,color:COLORS.N,label:"N",lx:nEx+5,ly:nEy-4}),
+        Math.abs(f.Fr)>0.05&&e(Arrow,{x1:bcx,y1:bcy,x2:frEx,y2:frEy,color:COLORS.Fr,label:"F_roz",lx:frEx+(frSign>0?5:-38),ly:frEy-6}),
+        fextActiva&&f.Fext>0.1&&e(Arrow,{x1:bcx,y1:bcy,x2:feEx,y2:feEy,color:COLORS.Fext,label:"F_ext",lx:feEx+(feSign>0?5:-36),ly:feEy-6}),
+        Math.abs(f.Res)>0.05&&e(Arrow,{x1:bcx,y1:bcy,x2:rEx,y2:rEy,color:COLORS.R,label:"F_total",lx:rEx+(resSign>0?5:-46),ly:rEy-8}),
+        // Estado
+        e("rect",{x:"12",y:"10",width:"192",height:"24",rx:"6",fill:eColor,fillOpacity:"0.12",stroke:eColor,strokeWidth:"0.5"}),
+        e("text",{x:"108",y:"26",textAnchor:"middle",fontSize:"11",fill:eColor,fontWeight:"600"},
+          f.estado==="reposo"?"✓ En reposo":f.estado==="desliza hacia abajo"?"↓ Desliza hacia abajo":"↑ Se mueve hacia arriba"
+        ),
+        // Leyenda
+        ...leyenda.map(({color,label},i)=>e(React.Fragment,{key:label},
+          e("rect",{x:"440",y:String(10+i*19),width:"9",height:"9",rx:"2",fill:color}),
+          e("text",{x:"455",y:String(19+i*19),fontSize:"10",fill:"#64748b"},label)
+        ))
+      )
+    ),
+
+    // CONTROLES + VALORES
+    e("div",{className:"grid2"},
+      // Controles
+      e("div",{className:"card"},
+        e("p",{className:"section-title"},"Variables"),
+        ...[
+          {label:"Ángulo θ (°)",val:angulo,input:angI,min:1,max:89,step:1,set:setAngulo,setI:setAngI},
+          {label:"Masa m (kg)",val:masa,input:masaI,min:0.1,max:20,step:0.1,set:setMasa,setI:setMasaI},
+          {label:"Coef. rozamiento μ",val:mu,input:muI,min:0,max:1,step:0.01,set:setMu,setI:setMuI},
+        ].map(({label,val,input,min,max,step,set,setI})=>
+          e("div",{className:"var-block",key:label},
+            e("div",{className:"var-row"},
+              e("span",{className:"var-label"},label),
+              e("input",{type:"number",value:input,min,max,step,onChange:ev=>inp(set,setI,ev.target.value,min,max)})
+            ),
+            e("input",{type:"range",min,max,step,value:val,onChange:ev=>sl(set,setI,parseFloat(ev.target.value))})
+          )
+        ),
+        e("div",{className:"fext-sep"},
+          e("label",{className:"fext-check"},
+            e("input",{type:"checkbox",checked:fextActiva,onChange:ev=>setFextActiva(ev.target.checked)}),
+            "Fuerza externa (F_ext)"
+          ),
+          fextActiva&&e(React.Fragment,null,
+            e("div",{className:"radio-row"},
+              e("label",null,e("input",{type:"radio",name:"fdir",checked:fextDir==="arriba",onChange:()=>setFextDir("arriba")}),"↑ Cuesta arriba"),
+              e("label",null,e("input",{type:"radio",name:"fdir",checked:fextDir==="abajo",onChange:()=>setFextDir("abajo")}),"↓ Cuesta abajo")
+            ),
+            e("div",{className:"var-row",style:{marginBottom:4}},
+              e("span",{className:"var-label"},"Módulo (N)"),
+              e("input",{type:"number",value:fextI,min:0,max:200,step:0.5,onChange:ev=>inp(setFext,setFextI,ev.target.value,0,200)})
+            ),
+            e("input",{type:"range",min:0,max:200,step:0.5,value:fext,onChange:ev=>sl(setFext,setFextI,parseFloat(ev.target.value))})
+          )
+        )
+      ),
+      // Valores
+      e("div",{className:"card"},
+        e("p",{className:"section-title"},"Fuerzas (N)"),
+        ...[
+          {label:"Peso P",val:f.P,color:COLORS.P},
+          {label:"Pₓ (∥ plano)",val:f.Px,color:COLORS.Pxy},
+          {label:"Pᵧ (⊥ plano)",val:f.Py,color:COLORS.Pxy},
+          {label:"Normal N",val:f.N,color:COLORS.N},
+          {label:"F_roz",val:f.Fr,color:COLORS.Fr},
+          ...(fextActiva?[{label:"F_ext",val:f.Fext,color:COLORS.Fext}]:[]),
+          {label:"F_total",val:f.Res,color:COLORS.R},
+        ].map(({label,val,color})=>
+          e("div",{className:"row",key:label},
+            e("span",{style:{color}},label),
+            e("span",null,`${n2(val)} N`)
+          )
+        ),
+        e("div",{className:"status-box",style:{background:eColor+"22",border:`0.5px solid ${eColor}`,color:eColor}},
+          "Estado: "+f.estado
+        )
+      )
+    ),
+
+    // WOLFRAMALPHA
+    e("p",{className:"section-title"},"Consultas a WolframAlpha"),
+    e("div",{className:"wolf-grid"},
+      ...queries.map(({title,desc,formula,action,extra})=>
+        e("div",{className:"wolf-card",key:title},
+          e("h4",null,title),
+          e("p",{className:"desc"},desc),
+          e("div",{className:"wolf-formula"},formula),
+          extra,
+          e("button",{className:"wolf-btn",onClick:action},"Abrir en WolframAlpha ↗")
+        )
+      )
+    ),
+
+    // RESOLUCIÓN
+    e("details",null,
+      e("summary",null,"Resolución paso a paso"),
+      e("div",{className:"paso"},
+        e("p",null,e("strong",null,"Datos: "),`m = ${masa} kg · g = 9,8 m/s² · θ = ${angulo}° · μ = ${mu}`+(fextActiva?` · F_ext = ${fext} N (${fextDir})`:"") ),
+        e("p",null,e("strong",null,"1. Peso"),e("br"),`P = m·g = ${masa}·9,8 = `,e("em",null,`${n2(f.P)} N`)),
+        e("p",null,e("strong",null,"2. Componentes del peso"),e("br"),
+          `Pₓ = P·sen(θ) = ${n2(f.P)}·sen(${angulo}°) = `,e("em",null,`${n2(f.Px)} N`),` (↓ plano)`,e("br"),
+          `Pᵧ = P·cos(θ) = ${n2(f.P)}·cos(${angulo}°) = `,e("em",null,`${n2(f.Py)} N`),` (⊥ hacia plano)`),
+        e("p",null,e("strong",null,"3. Normal"),e("br"),`N = Pᵧ = `,e("em",null,`${n2(f.N)} N`)),
+        e("p",null,e("strong",null,"4. F_roz máxima"),e("br"),`F_roz_máx = μ·N = ${mu}·${n2(f.N)} = `,e("em",null,`${n2(mu*f.N)} N`)),
+        fextActiva&&e("p",null,e("strong",null,"5. F_ext"),e("br"),`F_ext = ${n2(f.Fext)} N `+(fextDir==="arriba"?"(↑)":"(↓)")),
+        e("p",null,e("strong",null,`${fextActiva?"6":"5"}. F_total y aceleración`),e("br"),
+          `F_total = ${n2(f.Res)} N → a = F_total/m = ${n2(f.Res)}/${masa} = `,e("em",null,`${n2(Math.abs(acel))} m/s²`),
+          Math.abs(f.Res)<0.01?" (equilibrio)":f.Res>0?" (↓ cuesta abajo)":" (↑ cuesta arriba)"
+        )
+      )
+    ),
+    e("p",{className:"foot"},"g = 9,8 m/s² · Vectores a escala proporcional · WolframAlpha se abre en nueva pestaña")
+  );
+}
+
+const root=ReactDOM.createRoot(document.getElementById("root"));
+root.render(React.createElement(App));
+</script>
+</body>
+</html>
